@@ -1,5 +1,5 @@
 -- ref: http://m12i.hatenablog.com/entry/2013/11/13/023128
-module Parsec2 where
+module ParsecWithMakeTokenParser where
 
 import           Control.Applicative            ( (<*) )
 import           Text.Parsec
@@ -7,6 +7,7 @@ import           Text.Parsec.String
 import           Text.Parsec.Expr
 import           Text.Parsec.Token
 import           Text.Parsec.Language           ( emptyDef )
+
 
 -- 文法規則
 -- stmt ::= nop | var := expr | if expr then stmt else stmt fi | while expr do stmt od | stmt { ; stmt }+
@@ -16,10 +17,13 @@ import           Text.Parsec.Language           ( emptyDef )
 -- unop  ::= ~
 -- duop  ::= & | =
 
+
+-- 型の定義
 data Stmt = Nop | String := Expr | If Expr Stmt Stmt | While Expr Stmt | Seq [Stmt] deriving Show
 data Expr = Var String | Con Bool | Uno Unop Expr | Duo Duop Expr Expr deriving Show
 data Unop = Not deriving Show
 data Duop = And | Iff deriving Show
+
 
 -- emptyDefを拡張
 def = emptyDef
@@ -42,6 +46,7 @@ def = emptyDef
                       , "od"
                       ]
   }
+
 
 -- Token Parserの作成
 TokenParser { parens = m_parens, identifier = m_identifier, reservedOp = m_reservedOp, reserved = m_reserved, semiSep1 = m_semiSep1, whiteSpace = m_whiteSpace }
@@ -77,6 +82,7 @@ TokenParser { parens = m_parens, identifier = m_identifier, reservedOp = m_reser
 -- ()
 ---------------------------------
 
+
 -- Expression Parserの作成
 exprparser :: Parser Expr
 exprparser = buildExpressionParser table term <?> "expression"
@@ -103,4 +109,57 @@ term =
 --
 -- parseTest exprparser "true hoge"
 -- > Con True
+---------------------------------
+
+
+-- Statement Parserの作成
+-- Token ParserとExpression Parserを組み合わせて再帰下降を作る
+mainparser :: Parser Stmt
+mainparser = m_whiteSpace >> stmtparser <* eof
+ where
+  stmtparser :: Parser Stmt
+  stmtparser = fmap Seq (m_semiSep1 stmt1)
+  stmt1 =
+    (m_reserved "nop" >> return Nop)
+      <|> do
+            v <- m_identifier
+            m_reservedOp ":="
+            e <- exprparser
+            return (v := e)
+      <|> do
+            m_reserved "if"
+            b <- exprparser
+            m_reserved "then"
+            p <- stmtparser
+            m_reserved "else"
+            q <- stmtparser
+            m_reserved "fi"
+            return (If b p q)
+      <|> do
+            m_reserved "while"
+            b <- exprparser
+            m_reserved "do"
+            p <- stmtparser
+            m_reserved "od"
+            return (While b p)
+
+
+-- use
+
+play :: String -> IO ()
+play inp = case parse mainparser "" inp of
+  Left  err -> print err
+  Right ans -> print ans
+
+
+-- ex. --------------------------
+--
+--  play "h := hoge"
+-- > Seq ["h" := Var "hoge"]
+--
+-- play "if true then a := b else a := b fi"
+-- > Seq [If (Con True) (Seq ["a" := Var "b"]) (Seq ["a" := Var "b"])]
+--
+-- play "while true do x := hoge od"
+-- > Seq [While (Con True) (Seq ["x" := Var "hoge"])]
 ---------------------------------
