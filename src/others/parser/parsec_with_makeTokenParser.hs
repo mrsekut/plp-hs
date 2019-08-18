@@ -1,11 +1,7 @@
 -- ref: http://m12i.hatenablog.com/entry/2013/11/13/023128
 module Parsec2 where
 
--- import           Control.Applicative            ( (<*) )
--- import           Text.Parsec                    ( alphaNum
---                                                 , oneOf
---                                                 , letter
---                                                 )
+import           Control.Applicative            ( (<*) )
 import           Text.Parsec
 import           Text.Parsec.String
 import           Text.Parsec.Expr
@@ -79,4 +75,32 @@ TokenParser { parens = m_parens, identifier = m_identifier, reservedOp = m_reser
 -- ホワイトスペースをスキップ
 -- parseTest m_whiteSpace "  "
 -- ()
+---------------------------------
+
+-- Expression Parserの作成
+exprparser :: Parser Expr
+exprparser = buildExpressionParser table term <?> "expression"
+table =
+  [ [Prefix (m_reservedOp "~" >> return (Uno Not))]
+  , [Infix (m_reservedOp "&" >> return (Duo And)) AssocLeft]
+  , [Infix (m_reservedOp "=" >> return (Duo Iff)) AssocLeft]
+  ]
+
+term =
+  m_parens exprparser
+    <|> fmap Var m_identifier
+    <|> (m_reserved "true" >> return (Con True))
+    <|> (m_reserved "false" >> return (Con False))
+
+
+-- ex. --------------------------
+--
+-- parseTest exprparser "hoge & piyo"
+-- > Duo And (Var "hoge") (Var "piyo")
+--
+-- parseTest exprparser "t = p"
+-- > Duo Iff (Var "t") (Var "p")
+--
+-- parseTest exprparser "true hoge"
+-- > Con True
 ---------------------------------
