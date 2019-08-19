@@ -9,6 +9,7 @@ import           Control.Applicative            ( (<$>)
 import           Text.Parsec.String
 import           Data.Char                      ( digitToInt )
 import           Data.Functor.Identity
+import           Data.Functor
 
 
 data Expr = Add Expr Expr       -- 1 + 2
@@ -47,20 +48,27 @@ equality = do
         <|> pure r
 
 
--- relational ::= add | add ("<" add | "<=" add | ">" add | ">=" add)
+-- relOp :: "<" | "<=" | ">" |">="
+relOp :: Parser (Expr -> Expr -> Expr)
+relOp = l <|> g
+  where
+    l = do
+        char '<'
+        (char '=' $> Lte) <|> pure Lt
+    g = do
+        char '>'
+        (char '=' $> Gte) <|> pure Gt
+
+
+
+-- relational ::= add | add relOp add
 relational :: Parser Expr
 relational = do
     a <- spaces *> add
     (do
-            spaces *> char '<'
-            (Lt a <$> (spaces *> relational))
-                <|> (Lte a <$> (char '=' *> spaces *> relational))
+            r <- spaces *> relOp <* spaces
+            r a <$> add
         )
-        <|> (do
-                spaces *> char '>'
-                (Gt a <$> (spaces *> relational))
-                    <|> (Gte a <$> (char '=' *> spaces *> relational))
-            )
         <|> pure a
 
 
