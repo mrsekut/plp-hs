@@ -1,9 +1,4 @@
-module Parser
-    ( expr
-    , parseExpr
-    , Expr(..)
-    )
-where
+module Parser where
 
 import           Text.Parsec
 import           Control.Applicative            ( (<$>)
@@ -45,8 +40,10 @@ assign = equality
 equality :: Parser Expr
 equality = do
     r <- spaces *> relational
-    (Eq r <$> (spaces *> string "==" *> spaces *> equality))
-        <|> (Neq r <$> (spaces *> string "!=" *> spaces *> equality))
+    Eq r
+        <$> spacesS "==" equality
+        <|> Neq r
+        <$> spacesS "!=" equality
         <|> pure r
 
 
@@ -67,12 +64,6 @@ relational = do
         <|> pure a
 
 
--- addMap = [('+', Add), ('-', Sub)]
--- convertAddOp :: [(Char, Expr)] -> Char -> Maybe Expr
--- convertAddOp addMap s = lookup s addMap
-
-spacesC :: Char -> Parser Expr -> ParsecT String () Identity Expr
-spacesC c f = spaces *> char c *> spaces *> f
 
 -- add ::= term | term ('+' add | "-" add)
 add :: Parser Expr
@@ -99,16 +90,22 @@ unary =
 
 -- factor ::= '(' expr ')' | nat
 factor :: Parser Expr
-factor =
-    (spaces *> char '(' *> spaces *> expr <* spaces <* char ')' <* spaces)
-        <|> spaces
-        *>  nat
-        <*  spaces
+factor = (spaces *> char '(' *> skipW expr <* char ')' <* spaces) <|> nat
 
 
 -- nat ::= '0' | '1' | '2' | ...
 nat :: Parser Expr
-nat = Nat . read <$> many1 digit
+nat = skipW $ Nat . read <$> many1 digit
+
+
+spacesC :: Char -> Parser Expr -> ParsecT String () Identity Expr
+spacesC c f = spaces *> char c *> spaces *> f
+
+spacesS :: String -> Parser Expr -> ParsecT String () Identity Expr
+spacesS c f = spaces *> string c *> spaces *> f
+
+skipW :: Parser Expr -> Parser Expr
+skipW p = spaces *> p <* spaces
 
 
 parseExpr :: String -> Either ParseError Expr
@@ -121,4 +118,3 @@ run :: Show a => Parser a -> String -> IO ()
 run p input = case parse p "hcc" input of
     Left  err -> putStr "parse error at" >> print err
     Right x   -> print x
-
