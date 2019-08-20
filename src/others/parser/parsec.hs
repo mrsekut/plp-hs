@@ -38,53 +38,70 @@ assign = equality
 
 
 -- equality ::= add | add ("==" relational | "!=" relatoinal)
+-- equality :: Parser Expr
+-- equality = do
+--     r <- spaces *> relational
+--     Eq r
+--         <$> spacesS "==" equality
+--         <|> Neq r
+--         <$> spacesS "!=" equality
+--         <|> pure r
+
 equality :: Parser Expr
-equality = do
-    r <- spaces *> relational
-    Eq r
-        <$> spacesS "==" equality
-        <|> Neq r
-        <$> spacesS "!=" equality
-        <|> pure r
+equality = relational `chainl1` equalityop
+
+equalityop :: Parser (Expr -> Expr -> Expr)
+equalityop = choice $ map try [Neq <$ string "!=", Eq <$ string "=="]
 
 
--- relOp :: "<" | "<=" | ">" |">="
-relOp :: Parser (Expr -> Expr -> Expr)
-relOp = l <|> g
-  where
-    l = do
-        char '<'
-        (char '=' $> Lte) <|> pure Lt
-    g = do
-        char '>'
-        (char '=' $> Gte) <|> pure Gt
+-- relational :: Parser Expr
+-- relational = do
+--     a <- add
+--     choice $ map
+--         try
+--         [ Lte a <$> (string "<=" *> relational)
+--         , Lt a <$> (char '<' *> relational)
+--         , Gte a <$> (string ">=" *> relational)
+--         , Gt a <$> (char '>' *> relational)
+--         , pure a
+--         ]
 
-
-
--- relational ::= add | add relOp add
+-- relational ::= add (relop add | e)
 relational :: Parser Expr
-relational = do
-    a <- spaces *> add
-    (do
-            r <- spaces *> relOp <* spaces
-            r a <$> add
-        )
-        <|> pure a
+relational = add `chainl1` relop
 
+relop :: Parser (Expr -> Expr -> Expr)
+relop = choice $ map
+    try
+    [Lte <$ string "<=", Lt <$ string "<", Gte <$ string ">=", Gt <$ string ">"]
 
-
--- add ::= term | term ('+' add | "-" add)
+-- add ::= term (addop term | e)
 add :: Parser Expr
-add = do
-    t <- spaces *> term
-    (Add t <$> spacesC '+' add) <|> (Sub t <$> spacesC '-' add) <|> pure t
+add = term `chainl1` addop
+
+addop :: Parser (Expr -> Expr -> Expr)
+addop = Add <$ char '+' <|> Sub <$ char '-'
+
+
+-- -- add ::= term | term ('+' add | "-" add)
+-- add :: Parser Expr
+-- add = do
+--     t <- spaces *> term
+--     (Add t <$> spacesC '+' add) <|> (Sub t <$> spacesC '-' add) <|> pure t
 
 
 -- term ::= unary | unary ('*' unary |'/' unary)
+-- term :: Parser Expr
+-- term = do
+--     u <- spaces *> unary
+--     (Mul u <$> spacesC '*' term) <|> (Div u <$> spacesC '/' term) <|> pure u
+
 term :: Parser Expr
-term = do
-    u <- spaces *> unary
-    (Mul u <$> spacesC '*' term) <|> (Div u <$> spacesC '/' term) <|> pure u
+term = unary `chainl1` termop
+
+termop :: Parser (Expr -> Expr -> Expr)
+termop = Mul <$ char '*' <|> Div <$ char '/'
+
 
 
 -- unary ::= factor | ('+' | '-') factor
@@ -109,8 +126,8 @@ nat = skipW $ Nat . read <$> many1 digit
 spacesC :: Char -> Parser Expr -> ParsecT String () Identity Expr
 spacesC c f = spaces *> char c *> spaces *> f
 
-spacesS :: String -> Parser Expr -> ParsecT String () Identity Expr
-spacesS c f = spaces *> string c *> spaces *> f
+-- spacesS :: String -> Parser Expr -> ParsecT String () Identity Expr
+-- spacesS c f = spaces *> string c *> spaces *> f
 
 skipW :: Parser Expr -> Parser Expr
 skipW p = spaces *> p <* spaces
