@@ -23,36 +23,38 @@ data Value = IntVal Integer         -- 整数
 type Env = Map.Map Name Value
 
 
-type Eval2 a = ErrorT String Identity a
-runEval2 :: Eval2 a -> Either String a          -- エラーメッセージと結果
-runEval2 ev = runIdentity (runErrorT ev)
+type Eval3 a = ReaderT Env (ErrorT String Identity) a
+runEval3 :: Env -> Eval3 a -> Either String a
+runEval3 env ev = runIdentity (runErrorT (runReaderT ev env))
 
 
-eval2 :: Env -> Exp -> Eval2 Value
-eval2 env (Lit i) = return $ IntVal i
-eval2 env (Var n) = case Map.lookup n env of
-    Nothing  -> throwError ("unbound variable: " ++ n)
-    Just val -> return val
-eval2 env (Plus e1 e2) = do
-    e1' <- eval2 env e1
-    e2' <- eval2 env e2
+eval3 :: Exp -> Eval3 Value
+eval3 (Lit i) = return $ IntVal i
+eval3 (Var n) = do
+    env <- ask                                                  -- askってなんぞ
+    case Map.lookup n env of
+        Nothing  -> throwError ("unbound variable: " ++ n)
+        Just val -> return val
+eval3 (Plus e1 e2) = do
+    e1' <- eval3 e1
+    e2' <- eval3 e2
     case (e1', e2') of
         (IntVal i1, IntVal i2) -> return $ IntVal (i1 + i2)
         _                      -> throwError "type error in additoin"
-eval2 env (Abs n  e ) = return $ FuncVal env n e
-eval2 env (App e1 e2) = do
-    val1 <- eval2 env e1         -- FuncValのハズ
-    val2 <- eval2 env e2         -- 引数
+eval3 (Abs n e) = do
+    env <- ask
+    return $ FuncVal env n e
+eval3 (App e1 e2) = do
+    val1 <- eval3 e1         -- FuncValのハズ
+    val2 <- eval3 e2         -- 引数
     case val1 of
-        FuncVal env' n body -> eval2 (Map.insert n val2 env') body       -- 仮引数に実引数を入れて適用
-        _                   -> throwError "type error in application"
-
+        FuncVal env' n body ->
+            local (const (Map.insert n val2 env')) (eval3 body)       -- 仮引数に実引数を入れて適用
+        _ -> throwError "type error in application"
 
 
 -- 12 + ((λx -> x)(4+2))
 exampleExp = Lit 12 `Plus` (App (Abs "x" (Var "x")) (Lit 4 `Plus` Lit 2))
 
--- > runEval2 (eval2 Map.empty (Plus (Lit 1) (Abs "x" (Var "x"))))
--- Left "type error"
--- > runEval2 (eval2 Map.empty (Var "x"))
--- Left "undeifned variable: x"
+-- > runEval3 Map.empty (eval3 exampleExp)
+-- Right (IntVal 18)
