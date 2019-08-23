@@ -31,7 +31,7 @@ runEval3 env ev = runIdentity (runErrorT (runReaderT ev env))
 eval3 :: Exp -> Eval3 Value
 eval3 (Lit i) = return $ IntVal i
 eval3 (Var n) = do
-    env <- ask                                                  -- askってなんぞ
+    env <- ask
     case Map.lookup n env of
         Nothing  -> throwError ("unbound variable: " ++ n)
         Just val -> return val
@@ -54,7 +54,10 @@ eval3 (App e1 e2) = do
 
 
 -- 12 + ((λx -> x)(4+2))
-exampleExp = Lit 12 `Plus` (App (Abs "x" (Var "x")) (Lit 4 `Plus` Lit 2))
+-- exampleExp = Lit 12 `Plus` (App (Abs "x" (Var "x")) (Lit 4 `Plus` Lit 2))
 
+-- ((λx -> (λy -> x + y))(4)(2))
+exampleExp =
+    App (App (Abs "x" (Abs "y" (Plus (Var "x") (Var "y")))) (Lit 4)) (Lit 2)
 -- > runEval3 Map.empty (eval3 exampleExp)
 -- Right (IntVal 18)
