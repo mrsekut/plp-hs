@@ -1,31 +1,37 @@
-module C where
+module Main where
 
+import           System.Environment             ( getArgs )
+import           Parser                         ( parseProgram
+                                                , expr
+                                                , Expr(..)
+                                                )
 import           Text.Parsec
--- import           Data.List                      ( intercalate )
-import           Data.Text                      ( Text )
-import qualified Data.Text                     as T
-import qualified Data.Text.IO                  as T
 
-data Expr = Add Expr Expr       -- 1 + 2
-          | Sub Expr Expr       -- 1 - 2
-          | Mul Expr Expr       -- 1 * 2
-          | Div Expr Expr       -- 1 / 2
-          | Eq Expr Expr        -- 1 == 2
-          | Neq Expr Expr       -- 1 == 2
-          | Lt Expr Expr        -- 1 < 2
-          | Gt Expr Expr        -- 1 > 2
-          | Lte Expr Expr       -- 1 <= 2
-          | Gte Expr Expr       -- 1 >= 2
-          | Nat Int             -- 1,2,..
-            deriving Show
-
+asmHeader = mapM_ putStrLn [".intel_syntax noprefix", ".global hcc", "hcc:"]
 
 
 class Reifiable a where
     reify :: a -> [ String ]
 
+
 instance Reifiable Expr where
-    reify (Nat i) = [concat ["    push ", show i]]
+    reify (Nat i) = ["    push " ++ show i]
+    reify (LVar n) =
+        [ "    mov rax, rbp"
+        , "    sub rax, " ++ n
+        , "    push rax"
+        , "    pop rax"
+        , "    mov rax, [rax]"
+        , "    push rax"
+        ]
+    reify (Assign v, e) =
+        ["    mov rax, rbp", "    sub rax, " ++ v, "    push rax"]
+            ++ reify e
+            ++ [ "    pop radi"
+               , "    pop rax"
+               , "    mov [rax], rdi"
+               , "    push rdi"
+               ]
     reify (Add e1 e2) =
         reify e1
             ++ reify e2
@@ -117,15 +123,24 @@ instance Reifiable Expr where
                ]
 
 
+
+
 gen :: Expr -> IO ()
 gen = mapM_ putStrLn . reify
 
 
-asmHeader = mapM_ putStrLn [".intel_syntax noprefix", ".global hcc", "hcc:"]
 main :: IO ()
 main = do
-    let p = Add (Nat 2) (Nat 3)
-    asmHeader
-    gen p
-    putStrLn $ "    pop rax"
-    putStrLn $ "    ret"
+    -- let p = Add (Nat 2) (Nat 3)
+    -- gen p
+
+    args <- getArgs
+    case args of
+        [] -> putStrLn "Incorrect number of arguments"
+        _  -> do
+            asmHeader
+            case parseProgram (head args) of
+                Right e -> gen e
+                Left  e -> print e
+            putStrLn $ "    pop rax"
+            putStrLn $ "    ret"
