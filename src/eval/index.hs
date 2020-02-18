@@ -8,6 +8,7 @@ data AST = Int Int
          | Plus AST AST
          | Var String
          | Assign String AST
+         | Lambda String AST
         deriving (Eq, Show)
 
 type Env = IORef [(String, IORef AST)]
@@ -26,6 +27,9 @@ eval (Var x) env = do
 eval (Assign var ast) env = do
     envBind var ast env
     eval ast env
+eval (Lambda f x) env = do
+    envBind f x env
+    eval (Int (-1)) env
 
 
 
@@ -42,7 +46,16 @@ useBindVar = do
     print =<< eval (Var "y") env1 -- 'y' >> 8
     print =<< eval (Plus (Var "y") (Int 5)) env1 -- `y + 5` >> 13
 
-main = useBindVar
+
+-- 関数の定義
+useLambda :: IO ()
+useLambda = do
+    env1 <- emptyEnv
+    print =<< eval (Assign "error" (Int (-1))) env1
+
+    print =<< eval (Assign "f" (Lambda "x" (Plus (Var "x") (Int 1)))) env1 -- `f = x => x + 1`
+
+main = useLambda
 
 
 
