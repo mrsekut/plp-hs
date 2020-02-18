@@ -1,4 +1,4 @@
--- STRefを使ったevalの練習
+-- IORefを使ったevalの練習
 import           Data.IORef
 import           Data.Maybe
 import           Control.Monad                  ( liftM )
@@ -107,7 +107,8 @@ envBind var ast env = do
 bindVars :: [(String, AST)] -> Env -> IO Env
 bindVars bindings envRef = readIORef envRef >>= extendEnv bindings >>= newIORef
   where
-    extendEnv :: [(String, AST)] -> [(String, IORef AST)] -> IO [(String, IORef AST)]
+    extendEnv
+        :: [(String, AST)] -> [(String, IORef AST)] -> IO [(String, IORef AST)]
     extendEnv bindings env = liftM (++ env) (mapM addBinding bindings)
 
     addBinding :: (String, AST) -> IO (String, IORef AST)
